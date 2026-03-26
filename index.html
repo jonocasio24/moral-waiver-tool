@@ -77,7 +77,7 @@ button.secondary{background:#0f1728}
 <body>
 <header>
   <h1>Moral Waiver Determination App</h1>
-  <p>Regulation-strict mode using <strong>AR 601-210 Chapter 4</strong> as the decision baseline and your uploaded waiver checklist/TTP files only for packet-building steps. This version uses charge-by-charge disposition handling, excludes dismissed charges from threshold counts, stops processing on pending charges, and uses the original Army Waiver Packet Builder look and flow.</p>
+  <p>Regulation-strict mode using <strong>AR 601-210 Chapter 4</strong> as the decision baseline and your uploaded waiver checklist/TTP files only for packet-building steps. This version uses charge-by-charge disposition handling, excludes dismissed charges from threshold counts, stops processing on pending charges, and uses the original Army Waiver Packet Builder look and flow. It also includes PS/NPS selection and explicitly labels 4-7c nonwaiverable triggers so the output shows whether a major misconduct case stays waiver-eligible or becomes nonwaiverable.</p>
 </header>
 
 <div class="wrapper">
@@ -92,6 +92,13 @@ button.secondary{background:#0f1728}
         <div>
           <label>Recruiter / station</label>
           <input id="station" type="text" placeholder="Recruiter or station">
+        </div>
+        <div>
+          <label>Service type</label>
+          <select id="serviceType">
+            <option value="nps">Non-prior service (NPS)</option>
+            <option value="ps">Prior service (PS)</option>
+          </select>
         </div>
       </div>
       <div style="margin-top:12px">
@@ -389,6 +396,54 @@ const referenceCatalog = {
       why: 'At least one charge is marked pending/open, so the tool stops routine processing.'
     }
   ],
+  three_plus_nontraffic_stop: [
+    {
+      reg: 'AR 601-210',
+      para: '4-7c(1)',
+      sentence: 'Three or more offenses (convictions or other adverse dispositions) other than traffic.',
+      why: 'The counted nontraffic total reached three or more offenses across all entered categories.'
+    }
+  ],
+  ps_juvenile_major_stop: [
+    {
+      reg: 'AR 601-210',
+      para: '4-7c(2)',
+      sentence: 'Applicants with juvenile major misconduct offenses who have had no offenses within 5 years of application for enlistment may be considered for a waiver in meritorious cases.',
+      why: 'The applicant is marked prior service, has a counted juvenile major misconduct offense, and the case does not show a clean 5-year period from offense before application.'
+    }
+  ],
+  drug_trafficking_stop: [
+    {
+      reg: 'AR 601-210',
+      para: '4-7c(3)',
+      sentence: 'Subject of initial court conviction or other adverse disposition for sale, distribution, or trafficking (including “intent to”) of cannabis (marijuana), or any other controlled substance.',
+      why: 'A counted charge matches sale, distribution, trafficking, or intent-to-distribute drug conduct.'
+    }
+  ],
+  dui_two_within_three_stop: [
+    {
+      reg: 'AR 601-210',
+      para: '4-7c(5)',
+      sentence: 'Person with two or more convictions/other adverse dispositions within 3 years preceding application for enlistment for driving while intoxicated, drugged, or impaired.',
+      why: 'Two or more counted DUI/impaired-driving charges fall within the 3-year lookback.'
+    }
+  ],
+  ps_major_during_service_stop: [
+    {
+      reg: 'AR 601-210',
+      para: '4-7c(5)',
+      sentence: 'Person with PS who incurs a major misconduct conviction during or after military service.',
+      why: 'The applicant is marked prior service and at least one counted major misconduct charge is marked as occurring during or after military service.'
+    }
+  ],
+  repeat_drug_possession_stop: [
+    {
+      reg: 'AR 601-210',
+      para: '4-7c(6)',
+      sentence: 'Person with conviction/other adverse disposition of two or more separate charges of possession of any illegal drugs/drug paraphernalia within 3 years preceding application for enlistment.',
+      why: 'The counted charges show two or more separate possession/drug-paraphernalia offenses within the 3-year lookback.'
+    }
+  ],
   misconduct_stop: [
     {
       reg: 'AR 601-210',
@@ -669,6 +724,20 @@ function makeCharge(data = {}) {
         <label>Court / conviction date</label>
         <input class="courtDate" type="date" value="${escapeHtml(data.courtDate || '')}">
       </div>
+      <div>
+        <label>Juvenile offense?</label>
+        <select class="juvenile">
+          <option value="no">No</option>
+          <option value="yes">Yes</option>
+        </select>
+      </div>
+      <div>
+        <label>During / after military service?</label>
+        <select class="psMajorTiming">
+          <option value="no">No / not indicated</option>
+          <option value="yes">Yes</option>
+        </select>
+      </div>
     </div>
     <div style="margin-top:12px">
       <label>Charge notes</label>
@@ -680,6 +749,8 @@ function makeCharge(data = {}) {
   div.querySelector('.category').value = data.category || 'minor';
   populateSpecialOptions(div, data.category || 'minor', data.special || '');
   div.querySelector('.confinement').value = data.confinement || 'none';
+  div.querySelector('.juvenile').value = data.juvenile || 'no';
+  div.querySelector('.psMajorTiming').value = data.psMajorTiming || 'no';
   div.querySelector('.removeChargeBtn').addEventListener('click', () => {
     div.remove();
     if (!document.querySelector('.charge')) addCharge();
@@ -708,6 +779,8 @@ function getCharges() {
     special: ch.querySelector('.special').value,
     confinement: ch.querySelector('.confinement').value,
     courtDate: ch.querySelector('.courtDate').value,
+    juvenile: ch.querySelector('.juvenile').value,
+    psMajorTiming: ch.querySelector('.psMajorTiming').value,
     chargeNotes: ch.querySelector('.chargeNotes').value.trim()
   }));
 }
@@ -716,6 +789,7 @@ function saveState() {
   const state = {
     applicantName: document.getElementById('applicantName').value,
     station: document.getElementById('station').value,
+    serviceType: document.getElementById('serviceType').value,
     caseNotes: document.getElementById('caseNotes').value,
     charges: getCharges()
   };
@@ -727,6 +801,7 @@ function loadState() {
     const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     document.getElementById('applicantName').value = s.applicantName || '';
     document.getElementById('station').value = s.station || '';
+    document.getElementById('serviceType').value = s.serviceType || 'nps';
     document.getElementById('caseNotes').value = s.caseNotes || '';
     document.getElementById('charges').innerHTML = '';
     (s.charges && s.charges.length ? s.charges : [null]).forEach(c => addCharge(c || {}));
@@ -742,8 +817,22 @@ function getSpecialLabel(value, category) {
   return found ? found.label : '';
 }
 
+
+function yearsBetween(dateStr, now = new Date()) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d)) return null;
+  const ms = now - d;
+  return ms / (1000 * 60 * 60 * 24 * 365.25);
+}
+
+function chargeText(c) {
+  return `${(c.offenseName || '')} ${(c.chargeNotes || '')} ${(getSpecialLabel(c.special, c.category) || '')}`.toLowerCase();
+}
+
 function buildDecision() {
   const charges = getCharges();
+  const serviceType = document.getElementById('serviceType').value;
   const counted = charges.filter(c => c.disposition === 'guilty');
   const dismissed = charges.filter(c => c.disposition === 'dismissed');
   const pending = charges.filter(c => c.disposition === 'pending');
@@ -762,6 +851,20 @@ function buildDecision() {
 
   const hasLt15 = counted.some(c => c.confinement === 'lt15');
   const hasGte15 = counted.some(c => c.confinement === 'gte15');
+  const totalNonTraffic = counted.length;
+  const hasMajor = counts.major >= 1;
+  const juvenileMajorCount = counted.filter(c => c.category === 'major' && c.juvenile === 'yes').length;
+  const psJuvenileMajorNeedsStop = hasMajor && serviceType === 'ps' && juvenileMajorCount > 0 && counted.some(c => c.category === 'major' && c.juvenile === 'yes' && (yearsBetween(c.courtDate) === null || yearsBetween(c.courtDate) < 5));
+  const drugTraffickingStop = hasMajor && counted.some(c => c.special === 'maj_436' || chargeText(c).includes('intent to distribute') || chargeText(c).includes('distribution') || chargeText(c).includes('trafficking') || chargeText(c).includes('sale'));
+  const duiWithinThree = counted.filter(c => (specialEffectMap[c.special] || '') === 'dui' && yearsBetween(c.courtDate) !== null && yearsBetween(c.courtDate) <= 3).length;
+  const duiWithinThreeStop = hasMajor && duiWithinThree >= 2;
+  const psMajorDuringServiceStop = hasMajor && serviceType === 'ps' && counted.some(c => c.category === 'major' && c.psMajorTiming === 'yes');
+  const repeatDrugPossessionWithinThree = counted.filter(c => {
+    const txt = chargeText(c);
+    const possessionFlag = c.special === 'mis_316' || c.special === 'maj_428' || txt.includes('drug paraphernalia') || txt.includes('possession of marijuana') || txt.includes('possession of any illegal drug') || txt.includes('possession of illegal drug') || txt.includes('possession');
+    return possessionFlag && yearsBetween(c.courtDate) !== null && yearsBetween(c.courtDate) <= 3;
+  }).length;
+  const repeatDrugPossessionStop = hasMajor && repeatDrugPossessionWithinThree >= 2;
 
   let result = {
     qualification: 'Potentially qualified',
@@ -785,6 +888,96 @@ function buildDecision() {
       packet: 'stop_processing',
       notes: [
         {type:'bad', text:'At least one charge is pending/open. Chapter 4 bars pre-enlistment processing while the charge is pending.'}
+      ]
+    };
+    return {result, counts, charges, counted, dismissed, pending};
+  }
+
+  if (hasMajor && totalNonTraffic >= 3) {
+    result = {
+      qualification: 'Not qualified for a conduct waiver on the current facts entered',
+      processing: 'Nonwaiverable under AR 601-210, 4-7c(1): major misconduct plus 3 or more nontraffic offenses.',
+      authority: 'Stop and verify through the chain',
+      waiting: 'No routine waiver path shown',
+      refs: ['three_plus_nontraffic_stop'],
+      packet: 'stop_processing',
+      notes: [
+        {type:'bad', text:'Triggered AR 601-210, 4-7c(1): at least one counted major misconduct offense is present, and the counted nontraffic total reached three or more offenses across all entered categories.'}
+      ]
+    };
+    return {result, counts, charges, counted, dismissed, pending};
+  }
+
+  if (psJuvenileMajorNeedsStop) {
+    result = {
+      qualification: 'Not qualified for a conduct waiver on the current facts entered',
+      processing: 'Nonwaiverable under AR 601-210, 4-7c(2): PS juvenile major misconduct case does not meet the 5-year clean-period screen.',
+      authority: 'Stop and verify through the chain',
+      waiting: 'No routine waiver path shown',
+      refs: ['ps_juvenile_major_stop'],
+      packet: 'stop_processing',
+      notes: [
+        {type:'bad', text:'Triggered AR 601-210, 4-7c(2): the applicant is marked prior service and has a juvenile major misconduct charge without a clear 5-year offense-free period before application.'}
+      ]
+    };
+    return {result, counts, charges, counted, dismissed, pending};
+  }
+
+  if (drugTraffickingStop) {
+    result = {
+      qualification: 'Not qualified for a conduct waiver on the current facts entered',
+      processing: 'Nonwaiverable under AR 601-210, 4-7c(3): drug sale, distribution, trafficking, or intent to distribute.',
+      authority: 'Stop and verify through the chain',
+      waiting: 'No routine waiver path shown',
+      refs: ['drug_trafficking_stop'],
+      packet: 'stop_processing',
+      notes: [
+        {type:'bad', text:'Triggered AR 601-210, 4-7c(3): a counted charge matches sale, distribution, trafficking, or intent-to-distribute drug conduct.'}
+      ]
+    };
+    return {result, counts, charges, counted, dismissed, pending};
+  }
+
+  if (duiWithinThreeStop) {
+    result = {
+      qualification: 'Not qualified for a conduct waiver on the current facts entered',
+      processing: 'Nonwaiverable under AR 601-210, 4-7c(4): 2 or more DUI / impaired-driving offenses within 3 years.',
+      authority: 'Stop and verify through the chain',
+      waiting: 'No routine waiver path shown',
+      refs: ['dui_two_within_three_stop'],
+      packet: 'stop_processing',
+      notes: [
+        {type:'bad', text:'Triggered AR 601-210, 4-7c(4): two or more counted DUI / impaired-driving offenses fall within the 3-year lookback.'}
+      ]
+    };
+    return {result, counts, charges, counted, dismissed, pending};
+  }
+
+  if (psMajorDuringServiceStop) {
+    result = {
+      qualification: 'Not qualified for a conduct waiver on the current facts entered',
+      processing: 'Nonwaiverable under AR 601-210, 4-7c(5): PS major misconduct during or after military service.',
+      authority: 'Stop and verify through the chain',
+      waiting: 'No routine waiver path shown',
+      refs: ['ps_major_during_service_stop'],
+      packet: 'stop_processing',
+      notes: [
+        {type:'bad', text:'Triggered AR 601-210, 4-7c(5): the applicant is marked prior service, and a counted major misconduct charge is marked as occurring during or after military service.'}
+      ]
+    };
+    return {result, counts, charges, counted, dismissed, pending};
+  }
+
+  if (repeatDrugPossessionStop) {
+    result = {
+      qualification: 'Not qualified for a conduct waiver on the current facts entered',
+      processing: 'Nonwaiverable under AR 601-210, 4-7c(6): major misconduct plus 2 or more separate drug-possession/paraphernalia charges within 3 years.',
+      authority: 'Stop and verify through the chain',
+      waiting: 'No routine waiver path shown',
+      refs: ['repeat_drug_possession_stop'],
+      packet: 'stop_processing',
+      notes: [
+        {type:'bad', text:'Triggered AR 601-210, 4-7c(6): at least one counted major misconduct offense is present, and the counted record shows two or more separate possession/drug-paraphernalia charges within 3 years.'}
       ]
     };
     return {result, counts, charges, counted, dismissed, pending};
@@ -838,13 +1031,13 @@ function buildDecision() {
   if (counts.major >= 1) {
     result = {
       qualification: 'Requires waiver review',
-      processing: 'Major misconduct / felony waiver likely required.',
+      processing: 'Waiver-eligible major misconduct case under AR 601-210, 4-7: major misconduct present without a 4-7c nonwaiverable trigger.',
       authority: 'CG USAREC/USARD',
       waiting: '24 months from date of conviction prior to waiver processing',
       refs: ['major_waiver'],
       packet: 'waiver_cg_major',
       notes: [
-        {type:'warn', text:'At least one counted charge is major misconduct/felony. In regulation-strict mode, this controls the case.'}
+        {type:'warn', text:'At least one counted charge is major misconduct/felony. No 4-7c nonwaiverable trigger is currently matched, so the case stays in the major misconduct waiver lane.'}
       ]
     };
   } else if (counts.misconduct >= 2 && counts.misconduct <= 5) {
@@ -995,8 +1188,10 @@ function render() {
     const disp = c.disposition === 'guilty' ? 'Guilty/adverse' : (c.disposition === 'dismissed' ? 'Dismissed/rejected' : 'Pending/open');
     const cat = c.category === 'minor' ? 'Minor nontraffic' : (c.category === 'misconduct' ? 'Misconduct' : 'Major misconduct/felony');
     const parts = [`Charge ${idx+1}: ${c.offenseName || 'Unnamed charge'}`, `${disp}`, `${cat}`];
-    if (c.special) parts.push(`Special issue: ${c.special}`);
+    if (c.special) parts.push(`Special issue: ${getSpecialLabel(c.special, c.category) || c.special}`);
     if (c.courtDate) parts.push(`Court date: ${c.courtDate}`);
+    if (c.juvenile === 'yes') parts.push('Juvenile offense');
+    if (c.psMajorTiming === 'yes') parts.push('During/after military service');
     if (c.confinement !== 'none') parts.push(`Confinement: ${c.confinement === 'lt15' ? '< 15 days' : '15+ days'}`);
     return parts.join(' | ');
   }));
@@ -1011,6 +1206,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   localStorage.removeItem(STORAGE_KEY);
   document.getElementById('applicantName').value = '';
   document.getElementById('station').value = '';
+  document.getElementById('serviceType').value = 'nps';
   document.getElementById('caseNotes').value = '';
   document.getElementById('charges').innerHTML = '';
   addCharge();
@@ -1024,6 +1220,7 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
     '',
     `Applicant: ${document.getElementById('applicantName').value || 'Not entered'}`,
     `Recruiter / Station: ${document.getElementById('station').value || 'Not entered'}`,
+    `Service type: ${document.getElementById('serviceType').value === 'ps' ? 'Prior service (PS)' : 'Non-prior service (NPS)'}`,
     '',
     `Qualification status: ${result.qualification}`,
     `Processing status: ${result.processing}`,
@@ -1036,7 +1233,7 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
     `Dismissed count: ${counts.dismissed}`,
     '',
     'Charges:',
-    ...charges.map((c, i) => `- ${i+1}. ${c.offenseName || 'Unnamed charge'} | ${c.disposition} | ${c.category}${c.special ? ' | ' + (getSpecialLabel(c.special, c.category) || c.special) : ''}`),
+    ...charges.map((c, i) => `- ${i+1}. ${c.offenseName || 'Unnamed charge'} | ${c.disposition} | ${c.category}${c.special ? ' | ' + (getSpecialLabel(c.special, c.category) || c.special) : ''}${c.juvenile === 'yes' ? ' | juvenile offense' : ''}${c.psMajorTiming === 'yes' ? ' | during/after military service' : ''}`),
     '',
     'Packet documents:',
     ...p.documents.map(d => `- ${d}`)
@@ -1049,7 +1246,7 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
   }
 });
 
-['applicantName','station','caseNotes'].forEach(id => {
+['applicantName','station','serviceType','caseNotes'].forEach(id => {
   document.getElementById(id).addEventListener('input', render);
   document.getElementById(id).addEventListener('change', render);
 });
