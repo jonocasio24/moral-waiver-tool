@@ -12,7 +12,7 @@
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:linear-gradient(180deg,#0b1220,#10182b);color:var(--ink)}
-header{padding:22px 24px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;backdrop-filter:blur(8px);background:rgba(11,18,32,.92);z-index:5}
+header{padding:22px 24px 14px;border-bottom:1px solid var(--line);position:static;background:rgba(11,18,32,.92)}
 header h1{margin:0 0 6px;font-size:28px}
 header p{margin:0;color:var(--muted);max-width:1200px;line-height:1.45}
 .wrapper{display:grid;grid-template-columns:380px 1fr;gap:18px;padding:18px;max-width:1650px;margin:0 auto}
@@ -64,6 +64,9 @@ button.secondary{background:#0f1728}
 .footer{margin-top:18px;color:var(--muted);font-size:12px;line-height:1.5}
 .code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .hidden{display:none}
+.collapsible-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;background:linear-gradient(90deg,#152747,#0f1d34);color:var(--ink);border:0;border-bottom:1px solid var(--line);border-radius:0;cursor:pointer;font-size:18px;font-weight:700;text-align:left}
+.collapsible-toggle span:last-child{font-size:12px;color:var(--muted);font-weight:600}
+.collapsible-content.collapsed{display:none}
 @media (max-width: 1100px){
   .wrapper{grid-template-columns:1fr}
   .left{position:static;max-height:none}
@@ -141,30 +144,46 @@ button.secondary{background:#0f1728}
       </section>
 
       <section class="card">
-        <div class="kicker">Output summary</div>
-        <h2>What the tool is doing</h2>
-        <div id="summaryAlerts"></div>
+        <button class="collapsible-toggle" type="button" data-target="summaryCardContent">
+          <span>Output summary</span><span>Minimize</span>
+        </button>
+        <div id="summaryCardContent" class="collapsible-content" style="padding-top:14px">
+          <h2>What the tool is doing</h2>
+          <div id="summaryAlerts"></div>
+        </div>
       </section>
     </div>
 
     <section class="packet">
-      <div class="packethead"><h3>Step-by-step packet guide</h3></div>
-      <div class="body">
-        <div class="list" id="steps"></div>
+      <button class="collapsible-toggle" type="button" data-target="stepsSection">
+        <span>Step-by-step packet guide</span><span>Minimize</span>
+      </button>
+      <div id="stepsSection" class="collapsible-content">
+        <div class="body">
+          <div class="list" id="steps"></div>
+        </div>
       </div>
     </section>
 
     <div class="master">
       <section class="packet">
-        <div class="packethead"><h3>Required documents</h3></div>
-        <div class="body"><div class="list" id="documents"></div></div>
+        <button class="collapsible-toggle" type="button" data-target="documentsSection">
+          <span>Required documents</span><span>Minimize</span>
+        </button>
+        <div id="documentsSection" class="collapsible-content">
+          <div class="body"><div class="list" id="documents"></div></div>
+        </div>
       </section>
 
       <section class="packet">
-        <div class="packethead"><h3>Reference guide</h3></div>
-        <div class="body">
-          <div id="references" class="list"></div>
-          <div class="footer">This panel only shows regulation citations used for the current determination. Packet-build items come from your local checklist and TTP files.</div>
+        <button class="collapsible-toggle" type="button" data-target="referencesSection">
+          <span>Reference guide</span><span>Minimize</span>
+        </button>
+        <div id="referencesSection" class="collapsible-content">
+          <div class="body">
+            <div id="references" class="list"></div>
+            <div class="footer">This panel only shows regulation citations used for the current determination. Packet-build items come from your local checklist and TTP files.</div>
+          </div>
         </div>
       </section>
     </div>
@@ -187,6 +206,165 @@ button.secondary{background:#0f1728}
 
 <script>
 const STORAGE_KEY = 'moralWaiverStrictV1';
+
+const categoryOptionCatalog = {
+  minor: [
+    {value:'', label:'None / no specific offense selected'},
+    {value:'min_200', label:'200 Altered driver\'s license or identification'},
+    {value:'min_201', label:'201 Assault (simple assault with $500 or less and no confinement)'},
+    {value:'min_202', label:'202 Carrying concealed weapon (other than firearm); brass knuckles'},
+    {value:'min_203', label:'203 Worthless check under $500'},
+    {value:'min_204', label:'204 Committing a nuisance'},
+    {value:'min_205', label:'205 Conspiring to commit misdemeanor'},
+    {value:'min_206', label:'206 Curfew violation'},
+    {value:'min_207', label:'207 Damaging road signs'},
+    {value:'min_208', label:'208 Discharging firearm through carelessness or within municipal limits'},
+    {value:'min_209', label:'209 Disobeying summons / failure to appear other than traffic'},
+    {value:'min_210', label:'210 Disorderly conduct / creating disturbance / boisterous conduct'},
+    {value:'min_211', label:'211 Disturbing the peace'},
+    {value:'min_212', label:'212 Drinking alcoholic beverages on public transportation'},
+    {value:'min_213', label:'213 Drunk in public'},
+    {value:'min_214', label:'214 Dumping refuse near highway'},
+    {value:'min_215', label:'215 Failure to appear / contempt of court'},
+    {value:'min_217', label:'217 Failure to stop and render aid after accident'},
+    {value:'min_218', label:'218 Fare and/or toll evasion'},
+    {value:'min_219', label:'219 Harassment / menacing / stalking'},
+    {value:'min_220', label:'220 Illegal betting / gambling / raffle / lottery / cockfighting'},
+    {value:'min_221', label:'221 Indecent exposure'},
+    {value:'min_222', label:'222 Indecent / insulting / obscene language'},
+    {value:'min_223', label:'223 Jumping turnstile'},
+    {value:'min_224', label:'224 Juvenile adjudications such as runaway / truant / wayward'},
+    {value:'min_225', label:'225 Killing a domestic animal'},
+    {value:'min_226', label:'226 Littering'},
+    {value:'min_227', label:'227 Loitering'},
+    {value:'min_228', label:'228 Malicious mischief under $500'},
+    {value:'min_229', label:'229 Pandering'},
+    {value:'min_230', label:'230 Poaching'},
+    {value:'min_231', label:'231 Purchase / possession / consumption of alcohol or tobacco by minor'},
+    {value:'min_232', label:'232 Removing property from public grounds'},
+    {value:'min_233', label:'233 Removing property under lien'},
+    {value:'min_234', label:'234 Robbing an orchard'},
+    {value:'min_235', label:'235 Shooting from highway'},
+    {value:'min_236', label:'236 Throwing glass or other material in roadway'},
+    {value:'min_237', label:'237 Trespass (non-criminal or simple)'},
+    {value:'min_238', label:'238 Unlawful assembly'},
+    {value:'min_239', label:'239 Unlawful manufacture / sale / possession / consumption of liquor in public place'},
+    {value:'min_240', label:'240 Unlawful use of long-distance telephone calling card'},
+    {value:'min_241', label:'241 Using or wearing unlawful emblem / identification'},
+    {value:'min_242', label:'242 Vagrancy'},
+    {value:'min_243', label:'243 Vandalism under $500'},
+    {value:'min_244', label:'244 Violation of fireworks laws'},
+    {value:'min_245', label:'245 Violation of fish and game laws'},
+    {value:'min_246', label:'246 Violation of leash laws'},
+    {value:'min_247', label:'247 Violation of probation'},
+    {value:'min_248', label:'248 Other nontraffic offense not specifically listed'}
+  ],
+  misconduct: [
+    {value:'', label:'None / no specific offense selected'},
+    {value:'mis_300', label:'300 Assault / fighting / battery over $500 or confinement ordered'},
+    {value:'mis_301', label:'301 Carrying of weapon on school grounds (non-firearm)'},
+    {value:'mis_302', label:'302 Concealment of or failure to report a felony'},
+    {value:'mis_303', label:'303 Contributing to delinquency of minor'},
+    {value:'mis_304', label:'304 Crimes against the family (non-payment of child support/alimony)'},
+    {value:'mis_305', label:'305 Criminal mischief over $500 or confinement ordered'},
+    {value:'mis_306', label:'306 Criminal trespass'},
+    {value:'mis_307', label:'307 Desecration of grave'},
+    {value:'mis_308', label:'308 Domestic battery/violence not covered by 18 USC 922'},
+    {value:'mis_309', label:'309 Driving while drugged or intoxicated / impaired'},
+    {value:'mis_310', label:'310 Illegal/fraudulent use of credit card under $500'},
+    {value:'mis_311', label:'311 Larceny or conversion under $500'},
+    {value:'mis_312', label:'312 Leaving scene of accident or hit and run'},
+    {value:'mis_313', label:'313 Looting'},
+    {value:'mis_314', label:'314 Mailbox destruction'},
+    {value:'mis_315', label:'315 Mailing obscene or indecent matter'},
+    {value:'mis_316', label:'316 Possession of marijuana or drug paraphernalia'},
+    {value:'mis_317', label:'317 Prostitution or solicitation for prostitution'},
+    {value:'mis_318', label:'318 Reckless / careless / imprudent driving (misdemeanor threshold)'},
+    {value:'mis_319', label:'319 Reckless endangerment'},
+    {value:'mis_320', label:'320 Resisting arrest or eluding police'},
+    {value:'mis_321', label:'321 Selling or leasing weapons'},
+    {value:'mis_322', label:'322 Stolen property knowingly received under $500'},
+    {value:'mis_323', label:'323 Throwing rocks/missiles/objects at highway, sporting events, or vehicles'},
+    {value:'mis_324', label:'324 Unauthorized use or taking of vehicle / joy riding'},
+    {value:'mis_325', label:'325 Unlawful carrying of firearms or carrying concealed firearm'},
+    {value:'mis_326', label:'326 Unlawful entry'},
+    {value:'mis_327', label:'327 Use of phone/internet/electronic means to abuse or threaten'},
+    {value:'mis_328', label:'328 Vandalism over $500 or confinement ordered'},
+    {value:'mis_329', label:'329 Willfully discharging firearm so as to endanger life'},
+    {value:'mis_330', label:'330 Other misconduct offense not specifically listed'}
+  ],
+  major: [
+    {value:'', label:'None / no specific offense selected'},
+    {value:'maj_400', label:'400 Aggravated assault / assault with dangerous weapon / maiming'},
+    {value:'maj_401', label:'401 Arson'},
+    {value:'maj_402', label:'402 Attempt to commit a felony'},
+    {value:'maj_403', label:'403 Breaking and entering with intent to commit a felony'},
+    {value:'maj_404', label:'404 Bribery'},
+    {value:'maj_405', label:'405 Burglary'},
+    {value:'maj_406', label:'406 Carjacking'},
+    {value:'maj_407', label:'407 Carnal knowledge of a child'},
+    {value:'maj_408', label:'408 Carrying of weapon on school grounds (firearm)'},
+    {value:'maj_409', label:'409 Worthless check over $500'},
+    {value:'maj_410', label:'410 Child abuse'},
+    {value:'maj_411', label:'411 Child pornography'},
+    {value:'maj_412', label:'412 Conspiring to commit a felony'},
+    {value:'maj_413', label:'413 Criminal libel'},
+    {value:'maj_414', label:'414 Domestic battery/violence under Lautenberg (waiver not authorized if convicted)'},
+    {value:'maj_415', label:'415 Embezzlement'},
+    {value:'maj_416', label:'416 Extortion'},
+    {value:'maj_417', label:'417 Forgery / passing forged instrument'},
+    {value:'maj_418', label:'418 Grand larceny or larceny $500 or more'},
+    {value:'maj_419', label:'419 Grand theft auto'},
+    {value:'maj_420', label:'420 Hate crimes'},
+    {value:'maj_421', label:'421 Illegal/fraudulent use of credit card $500 or more'},
+    {value:'maj_422', label:'422 Indecent acts or liberties with a child / molestation'},
+    {value:'maj_423', label:'423 Indecent assault'},
+    {value:'maj_424', label:'424 Kidnapping or abduction'},
+    {value:'maj_425', label:'425 Mail matter theft / destruction / obstruction'},
+    {value:'maj_426', label:'426 Manslaughter'},
+    {value:'maj_427', label:'427 Murder'},
+    {value:'maj_428', label:'428 Narcotics or habit-forming drugs, wrongful possession or use'},
+    {value:'maj_429', label:'429 Negligent or vehicular homicide'},
+    {value:'maj_430', label:'430 Perjury or subornation of perjury'},
+    {value:'maj_431', label:'431 Possession or intent to use bomb/explosive materials'},
+    {value:'maj_432', label:'432 Public record alteration / destruction / removal'},
+    {value:'maj_433', label:'433 Rape / sexual abuse / sexual assault / incest / other sex crimes'},
+    {value:'maj_434', label:'434 Riot'},
+    {value:'maj_435', label:'435 Robbery, to include armed'},
+    {value:'maj_436', label:'436 Sale / distribution / trafficking of cannabis or controlled substance'},
+    {value:'maj_437', label:'437 Sodomy'},
+    {value:'maj_438', label:'438 Stolen property knowingly received $500 or more'},
+    {value:'maj_439', label:'439 Terrorist threats including bomb threats'},
+    {value:'maj_440', label:'440 Violation of civil rights'},
+    {value:'maj_441', label:'441 Other major misconduct offense not specifically listed'},
+    {value:'special_922', label:'Special issue: qualifying 18 USC 922 conviction'},
+    {value:'special_sexreg', label:'Special issue: sex-offender registration / nonwaiverable sexual felony'}
+  ]
+};
+
+const specialEffectMap = {
+  mis_308: 'domestic',
+  mis_309: 'dui',
+  mis_316: 'marijuana',
+  mis_317: 'prostitution',
+  maj_414: 'firearm922',
+  special_922: 'firearm922',
+  special_sexreg: 'sex',
+  maj_407: 'sex',
+  maj_411: 'sex',
+  maj_422: 'sex',
+  maj_423: 'sex',
+  maj_433: 'sex',
+  maj_437: 'sex'
+};
+
+function populateSpecialOptions(chargeEl, category, selectedValue='') {
+  const select = chargeEl.querySelector('.special');
+  const options = categoryOptionCatalog[category] || categoryOptionCatalog.minor;
+  select.innerHTML = options.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('');
+  const valid = options.some(opt => opt.value === selectedValue);
+  select.value = valid ? selectedValue : '';
+}
 
 const referenceCatalog = {
   dismissed_no_waiver: [
@@ -468,7 +646,7 @@ function makeCharge(data = {}) {
         </select>
       </div>
       <div>
-        <label>Chapter 4 category</label>
+        <label>Category</label>
         <select class="category">
           <option value="minor">Minor nontraffic</option>
           <option value="misconduct">Misconduct</option>
@@ -476,16 +654,8 @@ function makeCharge(data = {}) {
         </select>
       </div>
       <div>
-        <label>Single-offense trigger / special issue</label>
-        <select class="special">
-          <option value="">None</option>
-          <option value="dui">DUI / DWI / impaired driving</option>
-          <option value="marijuana">Possession of marijuana / paraphernalia</option>
-          <option value="prostitution">Prostitution / solicitation</option>
-          <option value="domestic">Domestic violence / battery (non-Lautenberg)</option>
-          <option value="sex">Felony sexual offense / sex offender registration</option>
-          <option value="firearm922">18 USC 922 firearm disqualifier</option>
-        </select>
+        <label>Regulation chart offense / special issue</label>
+        <select class="special"></select>
       </div>
       <div>
         <label>Confinement</label>
@@ -508,11 +678,15 @@ function makeCharge(data = {}) {
   `;
   div.querySelector('.disposition').value = data.disposition || 'guilty';
   div.querySelector('.category').value = data.category || 'minor';
-  div.querySelector('.special').value = data.special || '';
+  populateSpecialOptions(div, data.category || 'minor', data.special || '');
   div.querySelector('.confinement').value = data.confinement || 'none';
   div.querySelector('.removeChargeBtn').addEventListener('click', () => {
     div.remove();
     if (!document.querySelector('.charge')) addCharge();
+    render();
+  });
+  div.querySelector('.category').addEventListener('change', (e) => {
+    populateSpecialOptions(div, e.target.value, '');
     render();
   });
   div.querySelectorAll('input,select,textarea').forEach(el => {
@@ -562,6 +736,12 @@ function loadState() {
   }
 }
 
+function getSpecialLabel(value, category) {
+  const options = categoryOptionCatalog[category] || [];
+  const found = options.find(opt => opt.value === value);
+  return found ? found.label : '';
+}
+
 function buildDecision() {
   const charges = getCharges();
   const counted = charges.filter(c => c.disposition === 'guilty');
@@ -575,9 +755,10 @@ function buildDecision() {
     dismissed: dismissed.length
   };
 
-  const hasSex = counted.some(c => c.special === 'sex');
-  const hasFirearm922 = counted.some(c => c.special === 'firearm922');
-  const hasSingleTrigger = counted.some(c => ['dui','marijuana','prostitution','domestic'].includes(c.special));
+  const derivedSpecials = counted.map(c => specialEffectMap[c.special] || '');
+  const hasSex = derivedSpecials.includes('sex');
+  const hasFirearm922 = derivedSpecials.includes('firearm922');
+  const hasSingleTrigger = derivedSpecials.some(v => ['dui','marijuana','prostitution','domestic'].includes(v));
 
   const hasLt15 = counted.some(c => c.confinement === 'lt15');
   const hasGte15 = counted.some(c => c.confinement === 'gte15');
@@ -855,7 +1036,7 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
     `Dismissed count: ${counts.dismissed}`,
     '',
     'Charges:',
-    ...charges.map((c, i) => `- ${i+1}. ${c.offenseName || 'Unnamed charge'} | ${c.disposition} | ${c.category}${c.special ? ' | ' + c.special : ''}`),
+    ...charges.map((c, i) => `- ${i+1}. ${c.offenseName || 'Unnamed charge'} | ${c.disposition} | ${c.category}${c.special ? ' | ' + (getSpecialLabel(c.special, c.category) || c.special) : ''}`),
     '',
     'Packet documents:',
     ...p.documents.map(d => `- ${d}`)
@@ -875,6 +1056,19 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
 
 loadState();
 render();
+
+document.querySelectorAll('.collapsible-toggle').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const targetId = btn.getAttribute('data-target');
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    target.classList.toggle('collapsed');
+    const label = btn.querySelector('span:last-child');
+    if (label) label.textContent = target.classList.contains('collapsed') ? 'Expand' : 'Minimize';
+  });
+});
+
+
 </script>
 </body>
 </html>
